@@ -1,5 +1,4 @@
-# -*- coding: utf-8 -*-
-# Chạy: streamlit run AI.py   (cần file data_khach_hang.csv nằm cùng thư mục)
+
 from pathlib import Path
 
 import joblib
