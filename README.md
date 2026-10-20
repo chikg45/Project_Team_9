@@ -1,26 +1,25 @@
+## Cấu trúc thư mục
+
+```text
 Project_Team_9/
 ├── README.md
 ├── requirements.txt
 ├── .gitignore
-│
 ├── data/
-│   ├── raw/                       # Hai file dữ liệu gốc
-│   ├── simulated/                 # Dữ liệu động mô phỏng
+│   ├── raw/
+│   ├── simulated/
 │   └── processed/
-│       └── data_khach_hang.csv     # Kết quả Stage 1, đầu vào Stage 2
-│
+│       └── data_khach_hang.csv
 ├── notebooks/
 │   ├── Stage1.ipynb
 │   ├── PCA_KMeans.ipynb
 │   ├── Regression.ipynb
 │   └── Classification.ipynb
-│
-├── models/                        # Mô hình và bộ chuẩn hóa đã lưu
-│
+├── models/
 ├── app/
-│   └── app.py                     # Giao diện Streamlit hoặc Gradio
-│
+│   └── app.py
 └── reports/
     ├── BaoCao.docx
     ├── Slides.pptx
-    └── images/                    # Biểu đồ và ảnh chụp giao diện
+    └── images/
+```
