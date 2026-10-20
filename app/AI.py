@@ -23,7 +23,7 @@ LOG_COLS = ["Frequency", "MonetaryGBP", "TotalUnits", "AvgProductsPerInvoice", "
 TARGET = "Chi_tieu_90_ngay_GBP"
 LABEL = "Mua_lai_90_ngay"
 KM_FEATURES = ["Frequency", "MonetaryGBP", "TotalUnits", "AvgProductsPerInvoice",
-               "RecencyDays", "ObservedTenureDays", "AvgOrderValueGBP"]  # đúng thứ tự file KMeans gốc
+               "RecencyDays", "ObservedTenureDays", "AvgOrderValueGBP"]  
 APP_DIR = Path(__file__).parent
 KM_FILES = ["kmeans_pca.pkl", "comparison.csv", "scores_pca.csv", "scores_logscaled.csv",
             "cluster_profile.csv", "kmeans_elbow.png", "kmeans_silhouette.png", "kmeans_clusters.png"]
@@ -50,8 +50,6 @@ def load_data():
 
 @st.cache_resource
 def load_kmeans(df):
-    # PCA 3 thành phần fit lại trên dữ liệu gốc cho ra đúng PC1-3 trong pca_features.csv;
-    # KMeans (K=2) lấy từ mô hình đã lưu kmeans_pca.pkl
     X = log_features(df[KM_FEATURES])
     scaler = StandardScaler().fit(X)
     pca = PCA(n_components=3, random_state=42).fit(scaler.transform(X))
@@ -73,7 +71,6 @@ def train_regression(df):
 
 @st.cache_resource
 def train_classifier(df):
-    # Giống Task 4: chia 80/20, stratify, Logistic (có scaler) và Decision Tree max_depth=3
     X_tr, X_te, y_tr, y_te = train_test_split(df[FEATURES], df[LABEL], test_size=0.2,
                                               stratify=df[LABEL], random_state=42)
     scaler = StandardScaler().fit(X_tr)
@@ -89,7 +86,7 @@ def train_classifier(df):
 
 df = load_data()
 
-# ---------- Nhập số liệu một khách hàng (dùng cho cả 2 tab) ----------
+# ---------- Nhập số liệu một khách hàng ----------
 st.sidebar.header("Nhập số liệu khách hàng")
 inp = {c: st.sidebar.number_input(c, min_value=0.0, value=float(df[c].median())) for c in FEATURES}
 new_row = pd.DataFrame([inp])
@@ -126,7 +123,7 @@ with tab0:
     st.caption(f"Dữ liệu thiếu: {int(df.isna().sum().sum())} ô. "
                f"{(df[TARGET] == 0).mean():.0%} khách không chi tiêu gì trong 90 ngày.")
 
-# ---------- Tab 1: KMeans (dùng kết quả đã làm sẵn) ----------
+# ---------- Tab 1: KMeans  ----------
 with tab1:
     thieu = [f for f in KM_FILES if km(f) is None]
     if thieu:
