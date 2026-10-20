@@ -1,26 +1,40 @@
-
+# -*- coding: utf-8 -*-
+# Chạy: streamlit run AI.py   (cần file data_khach_hang.csv nằm cùng thư mục)
 from pathlib import Path
 
+import joblib
 import numpy as np
 import pandas as pd
 import streamlit as st
-from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.metrics import (accuracy_score, confusion_matrix, f1_score, mean_squared_error,
-                             precision_score, r2_score, recall_score, silhouette_score)
+                             precision_score, r2_score, recall_score)
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
 st.set_page_config(page_title="Phân tích khách hàng", layout="wide")
-st.title("📊 Phân tích khách hàng: KMeans & Regression")
+st.title("📊 Phân tích khách hàng")
 
 FEATURES = ["RecencyDays", "Frequency", "MonetaryGBP", "TotalUnits",
             "AvgProductsPerInvoice", "ObservedTenureDays", "AvgOrderValueGBP"]
 LOG_COLS = ["Frequency", "MonetaryGBP", "TotalUnits", "AvgProductsPerInvoice", "AvgOrderValueGBP"]
 TARGET = "Chi_tieu_90_ngay_GBP"
 LABEL = "Mua_lai_90_ngay"
+KM_FEATURES = ["Frequency", "MonetaryGBP", "TotalUnits", "AvgProductsPerInvoice",
+               "RecencyDays", "ObservedTenureDays", "AvgOrderValueGBP"]  # đúng thứ tự file KMeans gốc
+APP_DIR = Path(__file__).parent
+KM_FILES = ["kmeans_pca.pkl", "comparison.csv", "scores_pca.csv", "scores_logscaled.csv",
+            "cluster_profile.csv", "kmeans_elbow.png", "kmeans_silhouette.png", "kmeans_clusters.png"]
+
+
+def km(name):
+    """Tìm file kết quả KMeans trong thư mục ket_qua/ hoặc ngay cạnh AI.py."""
+    for folder in (APP_DIR / "ket_qua", APP_DIR):
+        if (folder / name).exists():
+            return folder / name
+    return None
 
 
 def log_features(X):
@@ -35,14 +49,13 @@ def load_data():
 
 
 @st.cache_resource
-def prepare_kmeans(df):
-    scaler = StandardScaler()
-    Xs = scaler.fit_transform(log_features(df[FEATURES]))
-    rows = []
-    for k in range(2, 11):
-        m = KMeans(n_clusters=k, random_state=42, n_init=10).fit(Xs)
-        rows.append({"K": k, "WCSS": m.inertia_, "Silhouette": silhouette_score(Xs, m.labels_)})
-    return scaler, Xs, pd.DataFrame(rows)
+def load_kmeans(df):
+    # PCA 3 thành phần fit lại trên dữ liệu gốc cho ra đúng PC1-3 trong pca_features.csv;
+    # KMeans (K=2) lấy từ mô hình đã lưu kmeans_pca.pkl
+    X = log_features(df[KM_FEATURES])
+    scaler = StandardScaler().fit(X)
+    pca = PCA(n_components=3, random_state=42).fit(scaler.transform(X))
+    return scaler, pca, joblib.load(km("kmeans_pca.pkl"))
 
 
 @st.cache_resource
@@ -76,7 +89,7 @@ def train_classifier(df):
 
 df = load_data()
 
-
+# ---------- Nhập số liệu một khách hàng (dùng cho cả 2 tab) ----------
 st.sidebar.header("Nhập số liệu khách hàng")
 inp = {c: st.sidebar.number_input(c, min_value=0.0, value=float(df[c].median())) for c in FEATURES}
 new_row = pd.DataFrame([inp])
@@ -113,58 +126,67 @@ with tab0:
     st.caption(f"Dữ liệu thiếu: {int(df.isna().sum().sum())} ô. "
                f"{(df[TARGET] == 0).mean():.0%} khách không chi tiêu gì trong 90 ngày.")
 
-# ---------- Tab 1: KMeans ----------
+# ---------- Tab 1: KMeans (dùng kết quả đã làm sẵn) ----------
 with tab1:
-    scaler_k, Xs, scores = prepare_kmeans(df)
-    best_k = int(scores.loc[scores["Silhouette"].idxmax(), "K"])
-    k = st.slider("Số cụm K (mặc định = K có Silhouette cao nhất)", 2, 10, best_k)
+    thieu = [f for f in KM_FILES if km(f) is None]
+    if thieu:
+        st.error("Thiếu file KMeans: " + ", ".join(thieu) +
+                 ". Hãy đặt chúng vào thư mục ket_qua/ nằm cạnh AI.py (hoặc ngay cạnh AI.py).")
+    else:
+        st.subheader("So sánh KMeans trên 7 đặc trưng (log + scale) và trên PCA")
+        st.dataframe(pd.read_csv(km("comparison.csv")).round(4))
 
-    model = KMeans(n_clusters=k, random_state=42, n_init=10).fit(Xs)
-    df_k = df.copy()
-    df_k["Cluster"] = model.labels_.astype(str)
-    st.metric("Silhouette", f"{silhouette_score(Xs, model.labels_):.3f}")
+        c1, c2 = st.columns(2)
+        c1.image(str(km("kmeans_elbow.png")))
+        c2.image(str(km("kmeans_silhouette.png")))
 
-    c1, c2 = st.columns(2)
-    c1.subheader("Elbow (WCSS)")
-    c1.line_chart(scores.set_index("K")["WCSS"])
-    c2.subheader("Silhouette")
-    c2.line_chart(scores.set_index("K")["Silhouette"])
+        c3, c4 = st.columns(2)
+        c3.write("Điểm theo K - PCA")
+        c3.dataframe(pd.read_csv(km("scores_pca.csv")).round(4))
+        c4.write("Điểm theo K - log + scale")
+        c4.dataframe(pd.read_csv(km("scores_logscaled.csv")).round(4))
 
-    st.subheader("Đặc điểm trung bình từng cụm")
-    profile = df_k.groupby("Cluster")[FEATURES + [TARGET]].mean().round(2)
-    profile.insert(0, "So_khach", df_k.groupby("Cluster").size())
-    st.dataframe(profile)
+        st.subheader("Đặc điểm trung bình từng cụm (K = 2)")
+        profile = pd.read_csv(km("cluster_profile.csv"), index_col=0, encoding="utf-8-sig")
+        st.dataframe(profile)
+        st.image(str(km("kmeans_clusters.png")))
 
-    pcs = PCA(n_components=2).fit_transform(Xs)
-    df_k["PC1"], df_k["PC2"] = pcs[:, 0], pcs[:, 1]
-    st.subheader("Biểu đồ cụm (PCA 2 chiều)")
-    st.scatter_chart(df_k, x="PC1", y="PC2", color="Cluster")
-
-    st.subheader("Khách hàng vừa nhập thuộc cụm nào?")
-    if st.button("Phân cụm", key="btn_cluster"):
-        label = model.predict(scaler_k.transform(log_features(new_row)))[0]
-        st.success(f"Khách hàng này thuộc **Cụm {label}**")
-        st.write("Hồ sơ trung bình của cụm này:")
-        st.dataframe(profile.loc[[str(label)]])
+        st.subheader("Khách hàng vừa nhập thuộc cụm nào?")
+        if st.button("Phân cụm", key="btn_cluster"):
+            scaler_k, pca_k, km = load_kmeans(df)
+            z = pca_k.transform(scaler_k.transform(log_features(new_row[KM_FEATURES])))
+            label = int(km.predict(z)[0])
+            st.success(f"Khách hàng này thuộc **Cụm {label}**")
+            st.write("Hồ sơ trung bình của cụm này:")
+            st.dataframe(profile.loc[[label]])
 
 # ---------- Tab 2: Regression ----------
 with tab2:
-    scaler_r, lin, tree, y_te, pred, metrics = train_regression(df)
-    st.subheader("So sánh 2 mô hình (tập kiểm tra 20%)")
-    st.dataframe(metrics.round(4))
-
-    chosen = st.selectbox("Xem biểu đồ thực tế vs dự đoán của mô hình", list(pred))
-    st.scatter_chart(pd.DataFrame({"Thuc_te": y_te.to_numpy(), "Du_doan": pred[chosen]}),
-                     x="Thuc_te", y="Du_doan")
-
-    st.subheader("Dự đoán chi tiêu 90 ngày tới của khách hàng vừa nhập")
-    if st.button("Dự đoán", key="btn_reg"):
-        p_lin = float(lin.predict(scaler_r.transform(new_row))[0])
-        p_tree = float(tree.predict(new_row)[0])
-        a, b = st.columns(2)
-        a.metric("Linear Regression", f"{max(p_lin, 0):,.2f} GBP")
-        b.metric("Decision Tree", f"{max(p_tree, 0):,.2f} GBP")
-        st.caption("Giá trị âm được đưa về 0.")
+     scaler_r, lin, tree_reg, y_te_r, pred_r, metrics_r = train_regression(df)
+       
+     st.subheader("So sánh 2 mô hình Regression (tập kiểm tra 20%)")
+     st.dataframe(metrics_r.round(4))
+   
+     chosen_reg = st.selectbox("Xem biểu đồ thực tế vs dự đoán của mô hình", list(pred_r))
+       
+       # Vẽ biểu đồ scatter thực tế vs dự đoán
+     chart_data = pd.DataFrame({
+           "Thuc_te": y_te_r.to_numpy(), 
+           "Du_doan": pred_r[chosen_reg]
+       })
+     st.scatter_chart(chart_data, x="Thuc_te", y="Du_doan")
+   
+     st.subheader("Dự đoán chi tiêu 90 ngày tới của khách hàng vừa nhập")
+     if st.button("Dự đoán chi tiêu", key="btn_reg"):
+           # Linear Regression dùng dữ liệu đã qua scaler_r
+           p_lin = float(lin.predict(scaler_r.transform(new_row))[0])
+           # Decision Tree Regressor dùng dữ liệu gốc mới nhập
+           p_tree = float(tree_reg.predict(new_row)[0])
+           
+           a, b = st.columns(2)
+           a.metric("Linear Regression", f"{max(p_lin, 0):,.2f} GBP")
+           b.metric("Decision Tree", f"{max(p_tree, 0):,.2f} GBP")
+           st.caption("Giá trị âm được đưa về 0.")
 
 # ---------- Tab 3: Task 4 - Phân loại mua lại ----------
 with tab3:
