@@ -76,7 +76,7 @@ def train_classifier(df):
 
 df = load_data()
 
-# ---------- Nhập số liệu một khách hàng (dùng cho cả 2 tab) ----------
+
 st.sidebar.header("Nhập số liệu khách hàng")
 inp = {c: st.sidebar.number_input(c, min_value=0.0, value=float(df[c].median())) for c in FEATURES}
 new_row = pd.DataFrame([inp])
