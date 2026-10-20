@@ -6,11 +6,12 @@ import pandas as pd
 import streamlit as st
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_squared_error, r2_score, silhouette_score
+from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.metrics import (accuracy_score, confusion_matrix, f1_score, mean_squared_error,
+                             precision_score, r2_score, recall_score, silhouette_score)
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.tree import DecisionTreeRegressor
+from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
 
 st.set_page_config(page_title="Phân tích khách hàng", layout="wide")
 st.title("📊 Phân tích khách hàng: KMeans & Regression")
@@ -19,6 +20,7 @@ FEATURES = ["RecencyDays", "Frequency", "MonetaryGBP", "TotalUnits",
             "AvgProductsPerInvoice", "ObservedTenureDays", "AvgOrderValueGBP"]
 LOG_COLS = ["Frequency", "MonetaryGBP", "TotalUnits", "AvgProductsPerInvoice", "AvgOrderValueGBP"]
 TARGET = "Chi_tieu_90_ngay_GBP"
+LABEL = "Mua_lai_90_ngay"
 
 
 def log_features(X):
@@ -56,6 +58,22 @@ def train_regression(df):
     return scaler, lin, tree, y_te, pred, metrics
 
 
+@st.cache_resource
+def train_classifier(df):
+    # Giống Task 4: chia 80/20, stratify, Logistic (có scaler) và Decision Tree max_depth=3
+    X_tr, X_te, y_tr, y_te = train_test_split(df[FEATURES], df[LABEL], test_size=0.2,
+                                              stratify=df[LABEL], random_state=42)
+    scaler = StandardScaler().fit(X_tr)
+    logi = LogisticRegression(class_weight="balanced", max_iter=1000, random_state=42)
+    logi.fit(scaler.transform(X_tr), y_tr)
+    tree = DecisionTreeClassifier(max_depth=3, class_weight="balanced", random_state=42).fit(X_tr, y_tr)
+    pred = {"Logistic Regression": logi.predict(scaler.transform(X_te)), "Decision Tree": tree.predict(X_te)}
+    scores = pd.DataFrame({n: [accuracy_score(y_te, p), precision_score(y_te, p),
+                               recall_score(y_te, p), f1_score(y_te, p)] for n, p in pred.items()},
+                          index=["Accuracy", "Precision (mua lại)", "Recall (mua lại)", "F1 (mua lại)"])
+    return scaler, logi, tree, y_te, pred, scores
+
+
 df = load_data()
 
 # ---------- Nhập số liệu một khách hàng (dùng cho cả 2 tab) ----------
@@ -63,7 +81,8 @@ st.sidebar.header("Nhập số liệu khách hàng")
 inp = {c: st.sidebar.number_input(c, min_value=0.0, value=float(df[c].median())) for c in FEATURES}
 new_row = pd.DataFrame([inp])
 
-tab0, tab1, tab2 = st.tabs(["🏠 Tổng quan dữ liệu", "🧩 Phân cụm KMeans", "📈 Dự đoán chi tiêu 90 ngày"])
+tab0, tab1, tab2, tab3 = st.tabs(["🏠 Tổng quan dữ liệu", "🧩 Phân cụm KMeans",
+                                  "📈 Dự đoán chi tiêu 90 ngày", "🔁 Dự đoán mua lại (Task 4)"])
 
 # ---------- Tab 0: Tổng quan dữ liệu ----------
 with tab0:
@@ -146,3 +165,25 @@ with tab2:
         a.metric("Linear Regression", f"{max(p_lin, 0):,.2f} GBP")
         b.metric("Decision Tree", f"{max(p_tree, 0):,.2f} GBP")
         st.caption("Giá trị âm được đưa về 0.")
+
+# ---------- Tab 3: Task 4 - Phân loại mua lại ----------
+with tab3:
+    scaler_c, logi, tree_c, y_te_c, pred_c, scores_c = train_classifier(df)
+    st.subheader("So sánh 2 mô hình (tập kiểm tra 20%)")
+    st.dataframe(scores_c.round(3))
+
+    st.subheader("Confusion matrix (hàng = thực tế, cột = dự đoán)")
+    cols = st.columns(2)
+    for col, (name, p) in zip(cols, pred_c.items()):
+        col.write(name)
+        col.dataframe(pd.DataFrame(confusion_matrix(y_te_c, p),
+                                   index=["Thực: Không mua lại", "Thực: Mua lại"],
+                                   columns=["Đoán: Không", "Đoán: Mua lại"]))
+
+    st.subheader("Khách vừa nhập có mua lại trong 90 ngày không?")
+    if st.button("Dự đoán mua lại", key="btn_clf"):
+        p_log = float(logi.predict_proba(scaler_c.transform(new_row))[0, 1])
+        p_tree = float(tree_c.predict_proba(new_row)[0, 1])
+        a, b = st.columns(2)
+        a.metric("Logistic Regression", "Mua lại" if p_log >= 0.5 else "Không mua lại", f"xác suất {p_log:.0%}", delta_color="off")
+        b.metric("Decision Tree", "Mua lại" if p_tree >= 0.5 else "Không mua lại", f"xác suất {p_tree:.0%}", delta_color="off")
