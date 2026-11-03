@@ -11,7 +11,20 @@ services:
       QDRANT_URL: http://database:6333
       QDRANT_COLLECTION: customer_inference_history
     depends_on:
-      database:
+      jupyter:
+    profiles: ["notebook"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: project-team-9:latest
+    ports:
+      - "127.0.0.1:8888:8888"
+    volumes:
+      - .:/workspace
+    command: ["python", "-m", "jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root"]
+    networks:
+      - project_network
+  database:
         condition: service_started
     restart: unless-stopped
     networks:
