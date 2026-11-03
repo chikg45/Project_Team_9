@@ -1,0 +1,42 @@
+name: Validate Docker Compose multi-container app
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'compose.yaml'
+      - 'docker-compose.yml'
+      - '.github/workflows/validate-compose.yml'
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate compose specification
+        run: docker compose -f docker-compose.yml config --quiet
+      - name: Build and start both containers
+        run: docker compose -f docker-compose.yml up -d --build
+      - name: Wait for web server
+        run: |
+          for i in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8501/_stcore/health; then exit 0; fi
+            sleep 5
+          done
+          docker compose -f docker-compose.yml logs
+          exit 1
+      - name: Test Streamlit inference and Qdrant persistence
+        run: docker compose -f docker-compose.yml exec -T web python app/smoke_test.py
+      - name: Show service status
+        if: always()
+        run: docker compose -f docker-compose.yml ps
+      - name: Collect logs and shut down
+        if: always()
+        run: |
+          docker compose -f docker-compose.yml logs --no-color > compose-test.log
+          docker compose -f docker-compose.yml down
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: docker-compose-logs
+          path: compose-test.log
