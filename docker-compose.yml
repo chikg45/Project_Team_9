@@ -1,0 +1,3 @@
+# Compatibility alias. Prefer: docker compose -f compose.yaml up --build
+include:
+  - compose.yaml
