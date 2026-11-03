@@ -11,7 +11,21 @@ services:
       QDRANT_URL: http://database:6333
       QDRANT_COLLECTION: customer_inference_history
     depends_on:
-      jupyter:
+      database:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - project_network
+
+  database:
+    image: qdrant/qdrant:v1.15.5
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+    networks:
+      - project_network
+
+  jupyter:
     profiles: ["notebook"]
     build:
       context: .
@@ -24,18 +38,7 @@ services:
     command: ["python", "-m", "jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root"]
     networks:
       - project_network
-  database:
-        condition: service_started
-    restart: unless-stopped
-    networks:
-      - project_network
-  database:
-    image: qdrant/qdrant:v1.15.5
-    volumes:
-      - qdrant_data:/qdrant/storage
-    restart: unless-stopped
-    networks:
-      - project_network
+
 volumes:
   qdrant_data:
 networks:
