@@ -1,6 +1,16 @@
 name: Validate merged Stage 1 and Stage 2
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'Project_Team_9/**'
+      - 'notebooks/**'
+      - 'Data/**'
+      - 'data_goc/**'
+      - 'requirements.txt'
+      - 'run_notebook.py'
+      - 'Dockerfile'
+      - '.github/workflows/validate-notebook.yml'
 jobs:
   execute:
     runs-on: ubuntu-latest
