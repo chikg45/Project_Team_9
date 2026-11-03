@@ -57,7 +57,20 @@ def main() -> None:
         # Keep completed cells and the failing cell's traceback on failure.
         nbformat.write(notebook, OUTPUT)
         print(f"Execution report: {OUTPUT.relative_to(ROOT)}", flush=True)
-    print("SUCCESS: all notebook code cells executed without an exception.", flush=True)
+    expected = [
+        ROOT / "Data/processed/data_khach_hang.csv",
+        ROOT / "Data/processed/data_regression.csv",
+        ROOT / "Data/processed/pca_features.csv",
+        ROOT / "models/PCA.joblib",
+        ROOT / "models/Classification.joblib",
+        ROOT / "app/kmeans_pca.pkl",
+        ROOT / "app/comparison.csv",
+        ROOT / "notebooks/ket_qua/so_sanh_mo_hinh.csv",
+    ]
+    missing = [str(p.relative_to(ROOT)) for p in expected if not p.is_file()]
+    if missing:
+        raise RuntimeError(f"Notebook ended but output files are missing: {missing}")
+    print("SUCCESS: all notebook code cells executed and expected outputs exist.", flush=True)
 
 
 if __name__ == "__main__":
