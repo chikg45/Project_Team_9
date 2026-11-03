@@ -7,7 +7,7 @@ import streamlit as st
 from sklearn.decomposition import PCA
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.metrics import (accuracy_score, confusion_matrix, f1_score, mean_squared_error,
-                             precision_score, r2_score, recall_score)
+                             precision_score, r2_score, recall_score, mean_absolute_error)
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
@@ -158,8 +158,13 @@ def model_tab(clf):
             col.dataframe(pd.DataFrame(confusion_matrix(y, p), index=["Thực: Không mua lại", "Thực: Mua lại"],
                                        columns=["Đoán: Không mua lại", "Đoán: Mua lại"]))
     else:
-        st.dataframe(pd.DataFrame([{"Mô hình": n, "RMSE (GBP)": np.sqrt(mean_squared_error(y, p)),
-                                    "R2": r2_score(y, p)} for n, p in pred.items()]).round(4))
+        st.dataframe(pd.DataFrame([{
+            "Mô hình": n,
+            "MAE (GBP)": mean_absolute_error(y, p),
+            "MSE (GBP²)": mean_squared_error(y, p),
+            "RMSE (GBP)": np.sqrt(mean_squared_error(y, p)),
+            "R²": r2_score(y, p)
+        } for n, p in pred.items()]).round(4))
         n = st.selectbox("Xem biểu đồ thực tế vs dự đoán của mô hình", list(pred))
         st.scatter_chart(pd.DataFrame({"Thực tế": y.to_numpy(), "Dự đoán": pred[n]}), x="Thực tế", y="Dự đoán")
 
@@ -173,7 +178,7 @@ def model_tab(clf):
             else:
                 col.metric(n, f"{v:,.2f} GBP")
         if not clf:
-            st.caption("Giá trị âm được đưa về 0.")
+            st.caption("Giá trị dự đoán âm được đưa về 0 khi hiển thị cho người dùng; bảng đánh giá mô hình sử dụng dự đoán thô.")
 
 
 with tab2:
