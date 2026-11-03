@@ -180,3 +180,66 @@ with tab2:
     model_tab(False)
 with tab3:
     model_tab(True)
+
+
+# ---------- Triển khai rubric: 3 dự đoán từ cùng một khách hàng ----------
+# Sử dụng các mô hình, biến đầu vào và preprocessing hiện có ở các tab bên trên.
+st.divider()
+st.header("🎯 Dự đoán tổng hợp: 3 kết quả trong một lần")
+st.caption("Nhập 7 đặc trưng ở thanh bên trái rồi bấm nút bên dưới. "
+           "Mô hình dự đoán trong container Web; lịch sử được ghi vào Qdrant container riêng.")
+
+from database import check_connection, history, save_prediction
+
+try:
+    database_online = check_connection()
+except Exception as exc:
+    database_online = False
+    st.warning(f"Chưa kết nối được Qdrant: {exc}")
+
+st.caption("🟢 Qdrant đã kết nối" if database_online else
+           "🔴 Qdrant chưa kết nối — cần kiểm tra docker compose logs database")
+
+if st.button("🚀 Dự đoán cả 3 kết quả", type="primary", key="all_three"):
+    try:
+        # Dùng đúng pipeline đang áp dụng cho các tab gốc.
+        scaler_k, pca_k, km_model = load_kmeans(df)
+        transformed = scaler_k.transform(log_features(new_row[KM_FEATURES]))
+        cluster = int(km_model.predict(pca_k.transform(transformed))[0])
+
+        scaler_reg, reg_model, _, _, _ = train(df, False)
+        predicted_spend = max(float(reg_model.predict(scaler_reg.transform(new_row))[0]), 0.0)
+
+        scaler_clf, clf_model, _, _, _ = train(df, True)
+        probability = float(clf_model.predict_proba(scaler_clf.transform(new_row))[0, 1])
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("🧩 Nhóm khách hàng", f"Cụm {cluster}")
+        col2.metric("💷 Chi tiêu 90 ngày", f"{predicted_spend:,.2f} GBP")
+        col3.metric("🔁 Khả năng mua lại", "Có" if probability >= 0.5 else "Không",
+                    f"Xác suất {probability:.1%}", delta_color="off")
+        st.caption("Kết quả minh họa từ các mô hình hiện có, không phải bảo đảm hành vi thực tế.")
+        if database_online:
+            try:
+                saved = save_prediction(inp, transformed[0], cluster, predicted_spend, probability)
+                st.success(f"Đã lưu cả 3 kết quả vào Qdrant lúc {saved['created_at']} (UTC).")
+            except Exception as exc:
+                st.error(f"Dự đoán thành công nhưng KHÔNG lưu được vào Qdrant: {exc}")
+        else:
+            st.error("Dự đoán thành công nhưng không thể lưu: Qdrant chưa kết nối.")
+    except Exception as exc:
+        st.exception(exc)
+
+with st.expander("🗃️ Lịch sử dự đoán được lưu trong Qdrant"):
+    if database_online:
+        try:
+            records = history()
+            if records.empty:
+                st.info("Chưa có dự đoán nào được lưu. Hãy bấm 'Dự đoán cả 3 kết quả'.")
+            else:
+                st.dataframe(records, use_container_width=True)
+                st.caption("Lịch sử lưu trên Docker named volume qdrant_data, không mất khi restart.")
+        except Exception as exc:
+            st.error(f"Không đọc được lịch sử Qdrant: {exc}")
+    else:
+        st.info("Database chưa sẵn sàng.")
