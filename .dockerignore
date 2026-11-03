@@ -1,0 +1,11 @@
+.git
+.venv
+venv
+__pycache__
+.ipynb_checkpoints
+.pytest_cache
+.env
+*.pyc
+notebooks/ket_qua
+Data/data_goc
+Data/csdl
