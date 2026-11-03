@@ -1,3 +1,30 @@
-# Compatibility alias. Prefer: docker compose -f compose.yaml up --build
-include:
-  - compose.yaml
+name: project-team-9
+services:
+  web:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    image: project-team-9-web:latest
+    ports:
+      - "127.0.0.1:8501:8501"
+    environment:
+      QDRANT_URL: http://database:6333
+      QDRANT_COLLECTION: customer_inference_history
+    depends_on:
+      database:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - project_network
+  database:
+    image: qdrant/qdrant:v1.15.5
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+    networks:
+      - project_network
+volumes:
+  qdrant_data:
+networks:
+  project_network:
+    driver: bridge
