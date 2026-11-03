@@ -8,3 +8,5 @@ streamlit==1.66.1
 qdrant-client==1.19.1
 jupyterlab
 ipykernel
+nbformat>=5.10,<6
+nbclient>=0.10,<1
